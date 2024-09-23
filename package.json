@@ -12,11 +12,11 @@
     "DOM"
   ],
   "bugs": {
-    "url": "https://github.com/suiGn/this.DOM/issues"
+    "url": "https://github.com/neurons-me/this.DOM/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/suiGn/this.DOM.git"
+    "url": "git+https://github.com/neurons-me/this.DOM.git"
   },
   "homepage": "https://www.npmjs.com/package/this.dom",
   "docs": "https://suiGn.github.io/this.DOM",
