@@ -1,6 +1,6 @@
 {
   "name": "this.dom",
-  "version": "1.0.93",
+  "version": "1.0.94",
   "description": "this dom",
   "main": "index.js",
   "scripts": {
@@ -20,7 +20,7 @@
   },
   "homepage": "https://www.npmjs.com/package/this.dom",
   "docs": "https://suiGn.github.io/this.DOM",
-  "type":"module",
+  "type": "module",
   "author": "suiGN",
   "license": "MIT",
   "repoType": "NPM Package",
