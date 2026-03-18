@@ -1,0 +1,10 @@
+{
+  "name": "this.DOM",
+  "entryPoints": ["entrypoints.ts"],
+  "out": "../typedocs",
+  "readme": "README.md",
+  "tsconfig": "tsconfig.json",
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true
+}

@@ -1,15 +1,26 @@
 {
   "name": "this.dom",
   "version": "1.0.97",
-  "description": "this dom",
-  "main": "index.js",
+  "description": "A structured data formatter for the DOM.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
-    "start": "node index.js",
+    "start": "node ./dist/index.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "docs:api": "typedoc --options docs/typedoc.json",
     "test": "test"
   },
   "keywords": [
-    "this",
-    "DOM"
+    "DOM",
+    "data",
+    "formatter"
   ],
   "bugs": {
     "url": "https://github.com/neurons-me/this.DOM/issues"
@@ -24,5 +35,15 @@
   "author": "suiGN",
   "license": "MIT",
   "repoType": "NPM Package",
-  "category": "dataformatter"
+  "category": "dataformatter",
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "linkedom": "latest"
+  },
+  "devDependencies": {
+    "typescript": "latest",
+    "typedoc": "latest"
+  }
 }
