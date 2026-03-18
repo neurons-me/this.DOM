@@ -2,17 +2,21 @@
   "name": "this.dom",
   "version": "1.0.97",
   "description": "A structured data formatter for the DOM.",
-  "main": "./dist/index.js",
+  "main": "./dist/dom.cjs",
+  "module": "./dist/dom.es.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "browser": "./dist/dom.es.js",
+      "import": "./dist/dom.es.js",
+      "require": "./dist/dom.cjs"
     }
   },
   "scripts": {
-    "start": "node ./dist/index.js",
-    "build": "tsc -p tsconfig.json",
+    "dev": "vite --config vite.config.ts",
+    "build": "vite build --config vite.config.ts",
+    "preview": "vite preview --config vite.config.ts",
     "typecheck": "tsc --noEmit",
     "docs:api": "typedoc --options docs/typedoc.json",
     "test": "test"
@@ -43,7 +47,10 @@
     "linkedom": "latest"
   },
   "devDependencies": {
+    "@types/node": "latest",
+    "typedoc": "latest",
     "typescript": "latest",
-    "typedoc": "latest"
+    "vite": "latest",
+    "vite-plugin-dts": "latest"
   }
 }

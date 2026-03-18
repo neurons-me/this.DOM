@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Runtime Loader</title>
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font: 13px/1.35 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  (async function () {
+    const LOCAL_GUI_CSS = '../../this/GUI/npm/dist/styles.css';
+    const LOCAL_GUI_BOOTSTRAP = '../../this/GUI/npm/dist/this.gui.umd.js';
+    const LOCAL_REACT_UMD = '../../this/GUI/npm/node_modules/react/umd/react.production.min.js';
+    const LOCAL_REACTDOM_UMD = '../../this/GUI/npm/node_modules/react-dom/umd/react-dom.production.min.js';
+    const LOCAL_ME_UMD = '../../this/.me/npm/dist/me.umd.js';
+    const LOCAL_CLEAKER_UMD = '../../core/cleaker/npm/dist/cleaker.umd.js';
+    const LOCAL_DOM_UMD = './npm/dist/dom.umd.js';
+
+    const CDN_GUI_CSS = 'https://cdn.jsdelivr.net/npm/this.gui@latest/dist/styles.css';
+    const CDN_GUI_BOOTSTRAP = 'https://cdn.jsdelivr.net/npm/this.gui@latest/dist/this.gui.umd.js';
+    const CDN_REACT_UMD = 'https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js';
+    const CDN_REACTDOM_UMD = 'https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js';
+    const CDN_ME_UMD = 'https://cdn.jsdelivr.net/npm/this.me@latest/dist/me.umd.js';
+    const CDN_CLEAKER_UMD = 'https://cdn.jsdelivr.net/npm/cleaker@latest/dist/cleaker.umd.js';
+    const CDN_DOM_UMD = 'https://cdn.jsdelivr.net/npm/this.dom@latest/dist/dom.umd.js';
+
+    function loadStyle(href, options) {
+      return new Promise(function (resolve, reject) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = href;
+        if (options && options.crossorigin) link.crossOrigin = options.crossorigin;
+        link.onload = function () { resolve(href); };
+        link.onerror = function () { reject(new Error('Failed to load ' + href)); };
+        document.head.appendChild(link);
+      });
+    }
+
+    function loadScript(src, options) {
+      return new Promise(function (resolve, reject) {
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = false;
+        if (options && options.crossorigin) script.crossOrigin = options.crossorigin;
+        script.onload = function () { resolve(src); };
+        script.onerror = function () { reject(new Error('Failed to load ' + src)); };
+        document.head.appendChild(script);
+      });
+    }
+
+    async function loadStyleWithFallback(localSrc, cdnSrc) {
+      try {
+        await loadStyle(localSrc);
+        return;
+      } catch (_) {}
+      await loadStyle(cdnSrc, { crossorigin: 'anonymous' });
+    }
+
+    async function loadScriptWithFallback(localSrc, cdnSrc) {
+      try {
+        await loadScript(localSrc);
+        return;
+      } catch (_) {}
+      await loadScript(cdnSrc, { crossorigin: 'anonymous' });
+    }
+
+    async function ensureReactRuntime() {
+      const hasReact = Boolean(window.React && typeof window.React.createContext === 'function');
+      const hasReactDOM = Boolean(window.ReactDOM && typeof window.ReactDOM.createRoot === 'function');
+      if (!hasReact) {
+        await loadScriptWithFallback(LOCAL_REACT_UMD, CDN_REACT_UMD);
+      }
+      if (!hasReactDOM) {
+        await loadScriptWithFallback(LOCAL_REACTDOM_UMD, CDN_REACTDOM_UMD);
+      }
+    }
+
+    await ensureReactRuntime();
+    await loadStyleWithFallback(LOCAL_GUI_CSS, CDN_GUI_CSS);
+    await loadScriptWithFallback(LOCAL_GUI_BOOTSTRAP, CDN_GUI_BOOTSTRAP);
+    await loadScriptWithFallback(LOCAL_ME_UMD, CDN_ME_UMD);
+    await loadScriptWithFallback(LOCAL_CLEAKER_UMD, CDN_CLEAKER_UMD);
+    await loadScriptWithFallback(LOCAL_DOM_UMD, CDN_DOM_UMD);
+
+    const rootEl = document.getElementById('root');
+    if (!rootEl) return;
+    const GUI = window.GUI;
+    if (!GUI || typeof GUI.mount !== 'function') {
+      rootEl.innerHTML =
+        '<div style="padding:24px">window.GUI.mount is not available.</div>';
+      return;
+    }
+    if (typeof GUI.bootstrap === 'function') {
+      await GUI.bootstrap();
+    }
+
+    const leftBar =
+      GUI.guiToolsLeftSidebarConfig ||
+      (GUI.menus && GUI.menus['GUI-Tools'] && GUI.menus['GUI-Tools'].leftSidebarConfig) || {
+        initialView: 'rail',
+        elements: [
+          { type: 'link', props: { label: 'Home', icon: 'home', href: '../../index.html' } },
+          { type: 'link', props: { label: 'this.DOM', icon: 'widgets', href: './index.html' } },
+          { type: 'link', props: { label: 'GitHub', icon: 'code', href: 'https://github.com/neurons-me/this.DOM' } },
+          { type: 'link', props: { label: 'npm', icon: 'package_2', href: 'https://www.npmjs.com/package/this.dom' } }
+        ]
+      };
+
+    const spec = {
+      type: 'Layout',
+      props: { leftBar },
+      children: [
+        {
+          type: 'Page',
+          props: { title: 'this.DOM Runtime', subtitle: 'GUI + LeftBar' },
+          children: [
+            {
+              type: 'Typography',
+              props: { sx: { color: 'text.secondary' } },
+              children: ['Modules loaded: GUI, .me, Cleaker, DOM']
+            }
+          ]
+        }
+      ]
+    };
+
+    GUI.mount(spec, '#root');
+  })().catch(function (error) {
+    console.error('[runtime-loader] Failed to load modules:', error);
+  });
+</script>
+</body>
+</html>
