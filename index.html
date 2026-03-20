@@ -2735,18 +2735,28 @@
       };
     }
 
-    if (node && typeof node.on === 'function') {
-      node.on('status:change', function (status) {
+    const subscribeToNodeEvents =
+      node && typeof node.on === 'function'
+        ? node.on.bind(node)
+        : null;
+
+    if (subscribeToNodeEvents) {
+      subscribeToNodeEvents('status:change', function (status) {
         cleakerStatus = status;
         daemonStatus = buildDaemonStatusFromReport(status, getActiveContext(), triadUsername);
         rerender();
       });
 
-      node.on('ready', function () {
+      subscribeToNodeEvents('ready', function () {
         rerender();
       });
     } else {
       console.warn('[cleaker/runtime] node.on is unavailable in this build; using manual refresh flow.');
+      if (node && typeof node.waitUntilReady === 'function') {
+        node.waitUntilReady().then(function () {
+          rerender();
+        }).catch(function () {});
+      }
     }
 
     function rerender() {
