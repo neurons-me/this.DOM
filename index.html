@@ -496,6 +496,7 @@
           '--mui-palette-text-secondary': '#9fb0b1',
           '--mui-palette-divider': 'rgba(255, 255, 255, 0.14)',
           '--mui-palette-primary-main': '#6fd7e6',
+          '--dom-mark-color': '#90caf9',
           '--mui-palette-primary-contrastText': '#062a30',
           '--mui-palette-success-main': '#49b675',
           '--mui-palette-warning-main': '#d0a85c',
@@ -512,6 +513,7 @@
         '--mui-palette-text-secondary': '#51606d',
         '--mui-palette-divider': 'rgba(15, 23, 32, 0.16)',
         '--mui-palette-primary-main': '#0f6a78',
+        '--dom-mark-color': '#0a3a42',
         '--mui-palette-primary-contrastText': '#f1fbfc',
         '--mui-palette-success-main': '#15803d',
         '--mui-palette-warning-main': '#b7791f',
@@ -2788,7 +2790,7 @@
       const title = opts.title || 'DOM';
       const color =
         opts.color ||
-        'var(--mui-palette-primary-main, var(--mui-palette-text-primary, #7bb0ff))';
+        'var(--dom-mark-color, var(--mui-palette-primary-main, var(--mui-palette-text-primary, #7bb0ff)))';
       const cellSize = 12;
       const viewBoxWidth = DOM_ICON_GRID[0].length * cellSize;
       const viewBoxHeight = DOM_ICON_GRID.length * cellSize;
