@@ -859,6 +859,7 @@
     if (controls.me) controls.me.value = selectedSources.me;
     if (controls.dom) controls.dom.value = selectedSources.dom;
 
+
     function reloadWithSelectedSources() {
       const nextSources = {
         gui: controls.gui && controls.gui.value === 'cdn' ? 'cdn' : 'local',
@@ -3488,6 +3489,22 @@
               label: 'Settings',
               icon: 'settings',
               items: [
+                {
+                  label: 'Admin View',
+                  icon: 'visibility',
+                  onClick: function () {
+                    if (typeof window.__guiToggleAdminView === 'function') {
+                      window.__guiToggleAdminView();
+                    }
+                  }
+                },
+                {
+                  label: 'Themes',
+                  icon: 'palette',
+                  onClick: function () {
+                    window.location.href = '../GUI/themes.html';
+                  }
+                },
                 {
                   label: inspectorEnabled ? 'Inspector · ON' : 'Inspector · OFF',
                   icon: inspectorEnabled ? 'code' : 'code_off',
