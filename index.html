@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>DOM .me</title>
+<title>this.DOM — Runtime</title>
 <template id="runtime-theme-style-template">
 
   body {
@@ -390,12 +390,14 @@
     const COLLAPSE_STORAGE_KEY = 'cleaker.runtime.collapsed.v2';
     const NAMESPACE_STORAGE_KEY = 'cleaker.namespace.v2';
     const INSPECTOR_STORAGE_KEY = 'cleaker.runtime.gui.inspector.v2';
-    const THIS_GUI_CDN_VERSION = '1.4.87';
+    const THIS_GUI_STABLE_VERSION = '1.4.89';
     const THIS_ME_CDN_VERSION = '3.4.7';
     const THIS_DOM_CDN_VERSION = '1.0.98';
     const CLEAKER_CDN_VERSION = '3.0.4';
     const REACT_CDN_VERSION = '18.3.1';
     const REACTDOM_CDN_VERSION = '18.3.1';
+    const GUI_LATEST_META_URL = 'https://registry.npmjs.org/this.gui/latest';
+    const REMOTE_ASSET_TIMEOUT_MS = 8000;
     const DAEMON_ORIGIN = 'http://localhost:8161';
     const TRIAD_SECRET_STORAGE_KEY = 'cleaker.triad.secret.v1';
     const TRIAD_USERNAME_STORAGE_KEY = 'cleaker.triad.username.v1';
@@ -444,8 +446,8 @@
     const LOCAL_ME_UMD = '../../this/.me/npm/dist/me.umd.js';
     const LOCAL_CLEAKER_UMD = '../../core/cleaker/npm/dist/cleaker.umd.js';
     const LOCAL_DOM_UMD = './npm/dist/dom.umd.js';
-    const CDN_GUI_CSS = 'https://cdn.jsdelivr.net/npm/this.gui@' + THIS_GUI_CDN_VERSION + '/dist/styles.css';
-    const CDN_GUI_BOOTSTRAP = 'https://cdn.jsdelivr.net/npm/this.gui@' + THIS_GUI_CDN_VERSION + '/dist/this.gui.umd.js';
+    const CDN_GUI_CSS = 'https://cdn.jsdelivr.net/npm/this.gui@' + THIS_GUI_STABLE_VERSION + '/dist/styles.css';
+    const CDN_GUI_BOOTSTRAP = 'https://cdn.jsdelivr.net/npm/this.gui@' + THIS_GUI_STABLE_VERSION + '/dist/this.gui.umd.js';
     const CDN_REACT_UMD = 'https://cdn.jsdelivr.net/npm/react@' + REACT_CDN_VERSION + '/umd/react.production.min.js';
     const CDN_REACTDOM_UMD = 'https://cdn.jsdelivr.net/npm/react-dom@' + REACTDOM_CDN_VERSION + '/umd/react-dom.production.min.js';
     const CDN_ME_UMD = 'https://cdn.jsdelivr.net/npm/this.me@' + THIS_ME_CDN_VERSION + '/dist/me.umd.js';
@@ -476,6 +478,7 @@
     };
     let applyTriadSecretHandler = null;
     let inspectorEnabled = false;
+    let guiLatestAssetsPromise = null;
     function readRuntimeThemeMode() {
       try {
         const raw = String(localStorage.getItem(THEME_MODE_STORAGE_KEY) || 'light').toLowerCase();
@@ -911,16 +914,48 @@
       return normalized;
     }
 
+    function isRemoteAssetUrl(value) {
+      return /^https?:\/\//i.test(String(value || ''));
+    }
+
     function loadStyle(href, options) {
       return new Promise(function (resolve, reject) {
         const link = document.createElement('link');
         link.rel = 'stylesheet';
         link.href = href;
-        if (options && options.crossorigin) link.crossOrigin = options.crossorigin;
-        link.onload = function () { resolve(href); };
-        link.onerror = function () {
+        const isRemote = isRemoteAssetUrl(href);
+        let settled = false;
+        let timeoutId = null;
+        const cleanup = function () {
+          if (timeoutId != null) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
+          link.onload = null;
+          link.onerror = null;
+        };
+        const finishResolve = function () {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resolve(href);
+        };
+        const finishReject = function (error) {
+          if (settled) return;
+          settled = true;
+          cleanup();
           try { link.remove(); } catch (_) {}
-          reject(new Error('Failed to load ' + href));
+          reject(error);
+        };
+        if (options && options.crossorigin) link.crossOrigin = options.crossorigin;
+        if (isRemote) {
+          timeoutId = window.setTimeout(function () {
+            finishReject(new Error('Failed to load ' + href + ' (timeout)'));
+          }, REMOTE_ASSET_TIMEOUT_MS);
+        }
+        link.onload = function () { finishResolve(); };
+        link.onerror = function () {
+          finishReject(new Error('Failed to load ' + href));
         };
         document.head.appendChild(link);
       });
@@ -931,11 +966,39 @@
         const script = document.createElement('script');
         script.src = src;
         script.async = false;
-        if (options && options.crossorigin) script.crossOrigin = options.crossorigin;
-        script.onload = function () { resolve(src); };
-        script.onerror = function () {
+        const isRemote = isRemoteAssetUrl(src);
+        let settled = false;
+        let timeoutId = null;
+        const cleanup = function () {
+          if (timeoutId != null) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
+          script.onload = null;
+          script.onerror = null;
+        };
+        const finishResolve = function () {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resolve(src);
+        };
+        const finishReject = function (error) {
+          if (settled) return;
+          settled = true;
+          cleanup();
           try { script.remove(); } catch (_) {}
-          reject(new Error('Failed to load ' + src));
+          reject(error);
+        };
+        if (options && options.crossorigin) script.crossOrigin = options.crossorigin;
+        if (isRemote) {
+          timeoutId = window.setTimeout(function () {
+            finishReject(new Error('Failed to load ' + src + ' (timeout)'));
+          }, REMOTE_ASSET_TIMEOUT_MS);
+        }
+        script.onload = function () { finishResolve(); };
+        script.onerror = function () {
+          finishReject(new Error('Failed to load ' + src));
         };
         document.head.appendChild(script);
       });
@@ -1001,6 +1064,84 @@
       return [
         { source: 'cdn', url: resolveAssetUrl('cdn', localSrc, cdnSrc), options: { crossorigin: 'anonymous' } }
       ];
+    }
+
+    function buildGuiVersionedAssets(version) {
+      const normalized = String(version || '').trim();
+      return {
+        css: 'https://cdn.jsdelivr.net/npm/this.gui@' + normalized + '/dist/styles.css',
+        js: 'https://cdn.jsdelivr.net/npm/this.gui@' + normalized + '/dist/this.gui.umd.js',
+        version: normalized
+      };
+    }
+
+    function getGuiStableAssets() {
+      return buildGuiVersionedAssets(THIS_GUI_STABLE_VERSION);
+    }
+
+    async function resolveGuiLatestAssets() {
+      if (guiLatestAssetsPromise) return guiLatestAssetsPromise;
+      guiLatestAssetsPromise = (async function () {
+        try {
+          const response = await fetch(GUI_LATEST_META_URL, { cache: 'no-store' });
+          if (!response.ok) throw new Error('latest metadata failed: ' + response.status);
+          const payload = await response.json();
+          const version = String(payload && payload.version || '').trim();
+          return version ? buildGuiVersionedAssets(version) : getGuiStableAssets();
+        } catch (_) {
+          return getGuiStableAssets();
+        }
+      })();
+      return guiLatestAssetsPromise;
+    }
+
+    function getLocalGuiAssets() {
+      return {
+        css: resolveAssetUrl('local', LOCAL_GUI_CSS, CDN_GUI_CSS),
+        js: resolveAssetUrl('local', LOCAL_GUI_BOOTSTRAP, CDN_GUI_BOOTSTRAP)
+      };
+    }
+
+    async function loadGuiRuntimeAssets(source) {
+      const latestAssets = await resolveGuiLatestAssets();
+      const stableAssets = getGuiStableAssets();
+      const localAssets = getLocalGuiAssets();
+      const candidates = source === 'local'
+        ? [
+            { source: 'local', css: localAssets.css, js: localAssets.js, version: null, local: true },
+            { source: 'stable', css: stableAssets.css, js: stableAssets.js, version: stableAssets.version, options: { crossorigin: 'anonymous' } },
+            { source: 'latest', css: latestAssets.css, js: latestAssets.js, version: latestAssets.version, options: { crossorigin: 'anonymous' } }
+          ]
+        : [
+            { source: 'latest', css: latestAssets.css, js: latestAssets.js, version: latestAssets.version, options: { crossorigin: 'anonymous' } },
+            { source: 'stable', css: stableAssets.css, js: stableAssets.js, version: stableAssets.version, options: { crossorigin: 'anonymous' } },
+            { source: 'local', css: localAssets.css, js: localAssets.js, version: null, local: true }
+          ];
+      let lastError = null;
+      for (let i = 0; i < candidates.length; i += 1) {
+        const candidate = candidates[i];
+        try {
+          if (candidate.local) {
+            const cssAvailable = await probeLocalAsset(candidate.css);
+            const jsAvailable = await probeLocalAsset(candidate.js);
+            if (cssAvailable === false || jsAvailable === false) {
+              lastError = new Error('Local GUI runtime not available.');
+              continue;
+            }
+          }
+          await loadStyle(candidate.css, candidate.options);
+          await loadScript(candidate.js, candidate.options);
+          return {
+            source: candidate.source,
+            url: candidate.js,
+            css: candidate.css,
+            version: candidate.version || null
+          };
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      throw lastError || new Error('Failed to load GUI runtime.');
     }
 
     async function loadSelectedAsset(source, localSrc, cdnSrc, kind) {
@@ -1211,9 +1352,8 @@
     }
     try {
       await ensureReactRuntime(selectedSources.gui);
-      await loadSelectedAsset(selectedSources.gui, LOCAL_GUI_CSS, CDN_GUI_CSS, 'style');
-      loadedRuntimeAssets.gui = await loadSelectedAsset(selectedSources.gui, LOCAL_GUI_BOOTSTRAP, CDN_GUI_BOOTSTRAP, 'script');
-      setRuntimeStatus('gui', loadedRuntimeAssets.gui.source, loadedRuntimeAssets.gui.url, 'on');
+      loadedRuntimeAssets.gui = await loadGuiRuntimeAssets(selectedSources.gui);
+      setRuntimeStatus('gui', loadedRuntimeAssets.gui.source, loadedRuntimeAssets.gui.url, 'on', loadedRuntimeAssets.gui.version);
       if (!window.GUI || (typeof window.GUI.mount !== 'function' && typeof window.GUI.bootstrap !== 'function')) {
         setRuntimeStatus(
           'gui',
@@ -1224,9 +1364,6 @@
         rootEl.innerHTML =
           '<div style="font-family:ui-sans-serif,system-ui;padding:24px">window.GUI runtime is missing. Failed to load this.gui.</div>';
         return;
-      }
-      if (typeof window.GUI.bootstrap === 'function') {
-        await window.GUI.bootstrap();
       }
       enableRuntimeThemeStyles();
       loadedRuntimeAssets.me = await loadSelectedAsset(selectedSources.me, LOCAL_ME_UMD, CDN_ME_UMD, 'script');
@@ -1338,7 +1475,8 @@
       GUI?.__VERSION__ ||
       GUI?.default?.version ||
       GUI?.default?.VERSION ||
-      THIS_GUI_CDN_VERSION;
+      (loadedRuntimeAssets.gui && loadedRuntimeAssets.gui.version) ||
+      THIS_GUI_STABLE_VERSION;
     const ME_VERSION =
       Me?.version ||
       Me?.VERSION ||
@@ -2877,6 +3015,62 @@
       '#####....####...##.....##',
     ];
 
+    function createDomIconSvgMarkup(options) {
+      const opts = options || {};
+      const color = String(opts.color || '#0f6a78');
+      const cellSize = Number(opts.cellSize || 16);
+      const padding = Number(opts.padding || 6);
+      const width = DOM_ICON_GRID[0].length * cellSize + padding * 2;
+      const height = DOM_ICON_GRID.length * cellSize + padding * 2;
+      const rects = [];
+      DOM_ICON_GRID.forEach(function (row, y) {
+        Array.prototype.forEach.call(row, function (cell, x) {
+          if (cell !== '#') return;
+          rects.push(
+            '<rect x="' + (padding + x * cellSize) + '" y="' + (padding + y * cellSize) + '" width="' + cellSize + '" height="' + cellSize + '" fill="' + color + '" stroke="' + color + '" stroke-opacity="0.14" stroke-width="1" vector-effect="non-scaling-stroke" />'
+          );
+        });
+      });
+      return (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + width + ' ' + height + '" fill="none" shape-rendering="crispEdges">' +
+        rects.join('') +
+        '</svg>'
+      );
+    }
+
+    function encodeSvgDataUri(svg) {
+      return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+    }
+
+    function setRuntimeFaviconHref(href) {
+      if (!href || typeof document === 'undefined') return;
+      let link = document.getElementById('runtime-favicon');
+      if (!link) {
+        link = document.createElement('link');
+        link.id = 'runtime-favicon';
+        link.rel = 'icon';
+        link.type = 'image/svg+xml';
+        document.head.appendChild(link);
+      }
+      link.href = href;
+    }
+
+    function syncRuntimeDocumentChrome(version) {
+      const mode = readRuntimeThemeMode();
+      const vars = getRuntimeThemeVars(mode);
+      const faviconColor =
+        vars['--mui-palette-primary-main'] ||
+        vars['--mui-palette-text-primary'] ||
+        '#0f6a78';
+      const svg = createDomIconSvgMarkup({ color: faviconColor });
+      setRuntimeFaviconHref(encodeSvgDataUri(svg));
+      try {
+        document.title = version
+          ? 'this.DOM v' + version + ' — Runtime'
+          : 'this.DOM — Runtime';
+      } catch (_) {}
+    }
+
     function createDomIcon(options) {
       if (!window.React || typeof window.React.createElement !== 'function') return null;
       const opts = options || {};
@@ -2930,6 +3124,10 @@
         window.React.createElement('g', { shapeRendering: 'crispEdges' }, pixelRects)
       );
     }
+    syncRuntimeDocumentChrome(DOM_VERSION);
+    window.addEventListener(THEME_MODE_EVENT, function () {
+      syncRuntimeDocumentChrome(DOM_VERSION);
+    });
 
     function createGuiLeftBarLogo() {
       if (!window.React || typeof window.React.createElement !== 'function') return null;
