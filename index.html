@@ -386,14 +386,16 @@
 <div id="root"></div>
 <script>
   (async function () {
-    const SOURCE_STORAGE_KEY = 'cleaker.runtime.sources.v1';
-    const COLLAPSE_STORAGE_KEY = 'cleaker.runtime.collapsed.v1';
-    const NAMESPACE_STORAGE_KEY = 'cleaker.namespace.v1';
-    const INSPECTOR_STORAGE_KEY = 'cleaker.runtime.gui.inspector.v1';
-    const THIS_GUI_CDN_VERSION = 'latest';
-    const THIS_ME_CDN_VERSION = 'latest';
-    const THIS_DOM_CDN_VERSION = 'latest';
-    const CLEAKER_LOCAL_VERSION = 'latest';
+    const SOURCE_STORAGE_KEY = 'cleaker.runtime.sources.v2';
+    const COLLAPSE_STORAGE_KEY = 'cleaker.runtime.collapsed.v2';
+    const NAMESPACE_STORAGE_KEY = 'cleaker.namespace.v2';
+    const INSPECTOR_STORAGE_KEY = 'cleaker.runtime.gui.inspector.v2';
+    const THIS_GUI_CDN_VERSION = '1.4.87';
+    const THIS_ME_CDN_VERSION = '3.4.7';
+    const THIS_DOM_CDN_VERSION = '1.0.98';
+    const CLEAKER_CDN_VERSION = '3.0.4';
+    const REACT_CDN_VERSION = '18.3.1';
+    const REACTDOM_CDN_VERSION = '18.3.1';
     const DAEMON_ORIGIN = 'http://localhost:8161';
     const TRIAD_SECRET_STORAGE_KEY = 'cleaker.triad.secret.v1';
     const TRIAD_USERNAME_STORAGE_KEY = 'cleaker.triad.username.v1';
@@ -442,22 +444,18 @@
     const LOCAL_ME_UMD = '../../this/.me/npm/dist/me.umd.js';
     const LOCAL_CLEAKER_UMD = '../../core/cleaker/npm/dist/cleaker.umd.js';
     const LOCAL_DOM_UMD = './npm/dist/dom.umd.js';
-    const CDN_GUI_CSS = 'https://cdn.jsdelivr.net/npm/this.gui@latest/dist/styles.css';
-    const CDN_GUI_BOOTSTRAP = 'https://cdn.jsdelivr.net/npm/this.gui@latest/dist/this.gui.umd.js';
-    const CDN_REACT_UMD = 'https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js';
-    const CDN_REACTDOM_UMD = 'https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js';
-    const CDN_ME_UMD = 'https://cdn.jsdelivr.net/npm/this.me@latest/dist/me.umd.js';
-    const CDN_CLEAKER_UMD = 'https://cdn.jsdelivr.net/npm/cleaker@latest/dist/cleaker.umd.js';
-    const CDN_DOM_UMD = 'https://cdn.jsdelivr.net/npm/this.dom@latest/dist/dom.umd.js';
-    const IS_LOCAL_RUNTIME =
-      window.location.protocol === 'file:' ||
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1';
+    const CDN_GUI_CSS = 'https://cdn.jsdelivr.net/npm/this.gui@' + THIS_GUI_CDN_VERSION + '/dist/styles.css';
+    const CDN_GUI_BOOTSTRAP = 'https://cdn.jsdelivr.net/npm/this.gui@' + THIS_GUI_CDN_VERSION + '/dist/this.gui.umd.js';
+    const CDN_REACT_UMD = 'https://cdn.jsdelivr.net/npm/react@' + REACT_CDN_VERSION + '/umd/react.production.min.js';
+    const CDN_REACTDOM_UMD = 'https://cdn.jsdelivr.net/npm/react-dom@' + REACTDOM_CDN_VERSION + '/umd/react-dom.production.min.js';
+    const CDN_ME_UMD = 'https://cdn.jsdelivr.net/npm/this.me@' + THIS_ME_CDN_VERSION + '/dist/me.umd.js';
+    const CDN_CLEAKER_UMD = 'https://cdn.jsdelivr.net/npm/cleaker@' + CLEAKER_CDN_VERSION + '/dist/cleaker.umd.js';
+    const CDN_DOM_UMD = 'https://cdn.jsdelivr.net/npm/this.dom@' + THIS_DOM_CDN_VERSION + '/dist/dom.umd.js';
     const IS_FILE_ORIGIN = window.location.protocol === 'file:';
     const IS_LOCALHOST_ORIGIN =
       window.location.hostname === 'localhost' ||
       window.location.hostname === '127.0.0.1';
-    const defaultSource = IS_LOCAL_RUNTIME ? 'local' : 'cdn';
+    const defaultSource = IS_FILE_ORIGIN ? 'local' : 'cdn';
     const controls = {
       panel: document.getElementById('external-topbar'),
       gui: document.getElementById('gui-source'),
@@ -608,11 +606,14 @@
     function readSavedSources() {
       try {
         const parsed = JSON.parse(localStorage.getItem(SOURCE_STORAGE_KEY) || '{}');
+        const normalizeSource = function (value) {
+          return value === 'local' || value === 'cdn' ? value : defaultSource;
+        };
         return {
-          gui: parsed.gui === 'cdn' ? 'cdn' : defaultSource,
-          cleaker: parsed.cleaker === 'cdn' ? 'cdn' : defaultSource,
-          me: parsed.me === 'cdn' ? 'cdn' : defaultSource,
-          dom: parsed.dom === 'cdn' ? 'cdn' : defaultSource
+          gui: normalizeSource(parsed.gui),
+          cleaker: normalizeSource(parsed.cleaker),
+          me: normalizeSource(parsed.me),
+          dom: normalizeSource(parsed.dom)
         };
       } catch (_) {
         return {
@@ -630,9 +631,10 @@
 
     function readCollapsedState() {
       try {
-        return localStorage.getItem(COLLAPSE_STORAGE_KEY) === 'true';
+        const raw = localStorage.getItem(COLLAPSE_STORAGE_KEY);
+        return raw == null ? true : raw === 'true';
       } catch (_) {
-        return false;
+        return true;
       }
     }
 
@@ -659,7 +661,10 @@
 
     async function hydrateLocalHostNamespace() {
       try {
-        const response = await fetch(DAEMON_ORIGIN + '/__bootstrap');
+        const response = await fetch(DAEMON_ORIGIN + '/__bootstrap', {
+          method: 'GET',
+          cache: 'no-store'
+        });
         if (!response.ok) return;
         const payload = await response.json();
         const rawDisplayName = String(payload?.resolverDisplayName || payload?.resolverHostName || '').trim();
@@ -679,11 +684,9 @@
     function readSavedContextKey() {
       try {
         const saved = String(localStorage.getItem(NAMESPACE_STORAGE_KEY) || '').trim();
-        const resolved = saved || DEFAULT_CONTEXT_KEY;
-        if (IS_FILE_ORIGIN && resolved !== 'local') return 'local';
-        return resolved;
+        return saved === 'local' || saved === DEFAULT_CONTEXT_KEY ? saved : DEFAULT_CONTEXT_KEY;
       } catch (_) {
-        return IS_FILE_ORIGIN ? 'local' : DEFAULT_CONTEXT_KEY;
+        return DEFAULT_CONTEXT_KEY;
       }
     }
 
@@ -832,6 +835,12 @@
     }
 
     const selectedSources = readSavedSources();
+    const loadedRuntimeAssets = {
+      gui: null,
+      cleaker: null,
+      me: null,
+      dom: null
+    };
     inspectorEnabled = readInspectorEnabled();
     applyInspectorCompatibility();
     installInspectorClickGuard();
@@ -909,7 +918,10 @@
         link.href = href;
         if (options && options.crossorigin) link.crossOrigin = options.crossorigin;
         link.onload = function () { resolve(href); };
-        link.onerror = function () { reject(new Error('Failed to load ' + href)); };
+        link.onerror = function () {
+          try { link.remove(); } catch (_) {}
+          reject(new Error('Failed to load ' + href));
+        };
         document.head.appendChild(link);
       });
     }
@@ -921,7 +933,10 @@
         script.async = false;
         if (options && options.crossorigin) script.crossOrigin = options.crossorigin;
         script.onload = function () { resolve(src); };
-        script.onerror = function () { reject(new Error('Failed to load ' + src)); };
+        script.onerror = function () {
+          try { script.remove(); } catch (_) {}
+          reject(new Error('Failed to load ' + src));
+        };
         document.head.appendChild(script);
       });
     }
@@ -935,18 +950,10 @@
     }
 
     let activeContextKey = readSavedContextKey();
-    if (!IS_FILE_ORIGIN && !IS_LOCALHOST_ORIGIN && activeContextKey === 'local') {
-      activeContextKey = DEFAULT_CONTEXT_KEY;
-      writeSavedContextKey(DEFAULT_CONTEXT_KEY);
-    }
-    if (IS_FILE_ORIGIN && activeContextKey !== 'local') {
-      activeContextKey = 'local';
-      writeSavedContextKey('local');
-    }
     const isLocalContextActive = function () {
       return getContextByKey(activeContextKey).origin === DAEMON_ORIGIN;
     };
-    if (isLocalContextActive() && (IS_FILE_ORIGIN || IS_LOCALHOST_ORIGIN)) {
+    if (isLocalContextActive()) {
       await hydrateLocalHostNamespace();
     }
 
@@ -966,23 +973,61 @@
       return 'me://' + getRemoteTarget() + ':read/' + REMOTE_PATH;
     }
 
+    async function probeLocalAsset(url) {
+      if (IS_FILE_ORIGIN) return null;
+      try {
+        const resolved = new URL(url, window.location.href);
+        if (resolved.origin !== window.location.origin) return null;
+        const response = await fetch(resolved.href, {
+          method: 'HEAD',
+          cache: 'no-store'
+        });
+        if (response.status === 405 || response.status === 501) {
+          return null;
+        }
+        return response.ok;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function getAssetLoadCandidates(source, localSrc, cdnSrc) {
+      if (source === 'local') {
+        return [
+          { source: 'local', url: resolveAssetUrl('local', localSrc, cdnSrc), options: undefined },
+          { source: 'cdn', url: resolveAssetUrl('cdn', localSrc, cdnSrc), options: { crossorigin: 'anonymous' } }
+        ];
+      }
+      return [
+        { source: 'cdn', url: resolveAssetUrl('cdn', localSrc, cdnSrc), options: { crossorigin: 'anonymous' } }
+      ];
+    }
+
     async function loadSelectedAsset(source, localSrc, cdnSrc, kind) {
-      const isCdn = source === 'cdn';
-      const target = isCdn ? cdnSrc : localSrc;
-      return kind === 'style'
-        ? await loadStyle(target, isCdn ? { crossorigin: 'anonymous' } : undefined)
-        : await loadScript(target, isCdn ? { crossorigin: 'anonymous' } : undefined);
+      const candidates = getAssetLoadCandidates(source, localSrc, cdnSrc);
+      const loader = kind === 'style' ? loadStyle : loadScript;
+      let lastError = null;
+      for (let i = 0; i < candidates.length; i += 1) {
+        const candidate = candidates[i];
+        try {
+          if (candidate.source === 'local') {
+            const available = await probeLocalAsset(candidate.url);
+            if (available === false) {
+              lastError = new Error('Local asset not available: ' + candidate.url);
+              continue;
+            }
+          }
+          await loader(candidate.url, candidate.options);
+          return candidate;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      throw lastError || new Error('Failed to load ' + kind + ' asset.');
     }
 
     async function loadRuntimeScriptWithFallback(source, localSrc, cdnSrc) {
-      const preferCdn = source === 'cdn';
-      if (!preferCdn) {
-        try {
-          await loadScript(localSrc);
-          return;
-        } catch (_) {}
-      }
-      await loadScript(cdnSrc, { crossorigin: 'anonymous' });
+      return loadSelectedAsset(source, localSrc, cdnSrc, 'script');
     }
 
     async function ensureReactRuntime(source) {
@@ -1167,10 +1212,15 @@
     try {
       await ensureReactRuntime(selectedSources.gui);
       await loadSelectedAsset(selectedSources.gui, LOCAL_GUI_CSS, CDN_GUI_CSS, 'style');
-      await loadSelectedAsset(selectedSources.gui, LOCAL_GUI_BOOTSTRAP, CDN_GUI_BOOTSTRAP, 'script');
-      setRuntimeStatus('gui', selectedSources.gui, resolveAssetUrl(selectedSources.gui, LOCAL_GUI_BOOTSTRAP, CDN_GUI_BOOTSTRAP), 'on');
+      loadedRuntimeAssets.gui = await loadSelectedAsset(selectedSources.gui, LOCAL_GUI_BOOTSTRAP, CDN_GUI_BOOTSTRAP, 'script');
+      setRuntimeStatus('gui', loadedRuntimeAssets.gui.source, loadedRuntimeAssets.gui.url, 'on');
       if (!window.GUI || (typeof window.GUI.mount !== 'function' && typeof window.GUI.bootstrap !== 'function')) {
-        setRuntimeStatus('gui', selectedSources.gui, resolveAssetUrl(selectedSources.gui, LOCAL_GUI_BOOTSTRAP, CDN_GUI_BOOTSTRAP), 'off');
+        setRuntimeStatus(
+          'gui',
+          loadedRuntimeAssets.gui ? loadedRuntimeAssets.gui.source : selectedSources.gui,
+          loadedRuntimeAssets.gui ? loadedRuntimeAssets.gui.url : resolveAssetUrl(selectedSources.gui, LOCAL_GUI_BOOTSTRAP, CDN_GUI_BOOTSTRAP),
+          'off'
+        );
         rootEl.innerHTML =
           '<div style="font-family:ui-sans-serif,system-ui;padding:24px">window.GUI runtime is missing. Failed to load this.gui.</div>';
         return;
@@ -1179,26 +1229,31 @@
         await window.GUI.bootstrap();
       }
       enableRuntimeThemeStyles();
-      await loadSelectedAsset(selectedSources.me, LOCAL_ME_UMD, CDN_ME_UMD, 'script');
-      setRuntimeStatus('me', selectedSources.me, resolveAssetUrl(selectedSources.me, LOCAL_ME_UMD, CDN_ME_UMD), 'on');
+      loadedRuntimeAssets.me = await loadSelectedAsset(selectedSources.me, LOCAL_ME_UMD, CDN_ME_UMD, 'script');
+      setRuntimeStatus('me', loadedRuntimeAssets.me.source, loadedRuntimeAssets.me.url, 'on');
       try {
-        await loadSelectedAsset(selectedSources.dom, LOCAL_DOM_UMD, CDN_DOM_UMD, 'script');
-        setRuntimeStatus('dom', selectedSources.dom, resolveAssetUrl(selectedSources.dom, LOCAL_DOM_UMD, CDN_DOM_UMD), 'on');
+        loadedRuntimeAssets.dom = await loadSelectedAsset(selectedSources.dom, LOCAL_DOM_UMD, CDN_DOM_UMD, 'script');
+        setRuntimeStatus('dom', loadedRuntimeAssets.dom.source, loadedRuntimeAssets.dom.url, 'on');
       } catch (_) {
-        setRuntimeStatus('dom', selectedSources.dom, resolveAssetUrl(selectedSources.dom, LOCAL_DOM_UMD, CDN_DOM_UMD), 'off');
+        setRuntimeStatus(
+          'dom',
+          loadedRuntimeAssets.dom ? loadedRuntimeAssets.dom.source : selectedSources.dom,
+          loadedRuntimeAssets.dom ? loadedRuntimeAssets.dom.url : resolveAssetUrl(selectedSources.dom, LOCAL_DOM_UMD, CDN_DOM_UMD),
+          'off'
+        );
       }
     } catch (error) {
-      const guiUrl = resolveAssetUrl(selectedSources.gui, LOCAL_GUI_BOOTSTRAP, CDN_GUI_BOOTSTRAP);
-      const meUrl = resolveAssetUrl(selectedSources.me, LOCAL_ME_UMD, CDN_ME_UMD);
-      const domUrl = resolveAssetUrl(selectedSources.dom, LOCAL_DOM_UMD, CDN_DOM_UMD);
+      const guiUrl = loadedRuntimeAssets.gui ? loadedRuntimeAssets.gui.url : resolveAssetUrl(selectedSources.gui, LOCAL_GUI_BOOTSTRAP, CDN_GUI_BOOTSTRAP);
+      const meUrl = loadedRuntimeAssets.me ? loadedRuntimeAssets.me.url : resolveAssetUrl(selectedSources.me, LOCAL_ME_UMD, CDN_ME_UMD);
+      const domUrl = loadedRuntimeAssets.dom ? loadedRuntimeAssets.dom.url : resolveAssetUrl(selectedSources.dom, LOCAL_DOM_UMD, CDN_DOM_UMD);
       if (!window.GUI) {
-        setRuntimeStatus('gui', selectedSources.gui, guiUrl, 'off');
+        setRuntimeStatus('gui', loadedRuntimeAssets.gui ? loadedRuntimeAssets.gui.source : selectedSources.gui, guiUrl, 'off');
       }
       if (!window.Me) {
-        setRuntimeStatus('me', selectedSources.me, meUrl, 'off');
+        setRuntimeStatus('me', loadedRuntimeAssets.me ? loadedRuntimeAssets.me.source : selectedSources.me, meUrl, 'off');
       }
       if (!window.DOM) {
-        setRuntimeStatus('dom', selectedSources.dom, domUrl, 'off');
+        setRuntimeStatus('dom', loadedRuntimeAssets.dom ? loadedRuntimeAssets.dom.source : selectedSources.dom, domUrl, 'off');
       }
       rootEl.innerHTML =
         '<div style="font-family:ui-sans-serif,system-ui;padding:24px">this.GUI/.me bootstrap failed: ' + (error && error.message ? error.message : String(error)) + '</div>';
@@ -1206,10 +1261,15 @@
     }
 
     try {
-      await loadSelectedAsset(selectedSources.cleaker, LOCAL_CLEAKER_UMD, CDN_CLEAKER_UMD, 'script');
-      setRuntimeStatus('cleaker', selectedSources.cleaker, resolveAssetUrl(selectedSources.cleaker, LOCAL_CLEAKER_UMD, CDN_CLEAKER_UMD), 'on');
+      loadedRuntimeAssets.cleaker = await loadSelectedAsset(selectedSources.cleaker, LOCAL_CLEAKER_UMD, CDN_CLEAKER_UMD, 'script');
+      setRuntimeStatus('cleaker', loadedRuntimeAssets.cleaker.source, loadedRuntimeAssets.cleaker.url, 'on');
     } catch (error) {
-      setRuntimeStatus('cleaker', selectedSources.cleaker, resolveAssetUrl(selectedSources.cleaker, LOCAL_CLEAKER_UMD, CDN_CLEAKER_UMD), 'off');
+      setRuntimeStatus(
+        'cleaker',
+        loadedRuntimeAssets.cleaker ? loadedRuntimeAssets.cleaker.source : selectedSources.cleaker,
+        loadedRuntimeAssets.cleaker ? loadedRuntimeAssets.cleaker.url : resolveAssetUrl(selectedSources.cleaker, LOCAL_CLEAKER_UMD, CDN_CLEAKER_UMD),
+        'off'
+      );
       rootEl.innerHTML =
         '<div style="font-family:ui-sans-serif,system-ui;padding:24px">Failed to load cleaker from local UMD and npm CDN.</div>';
       return;
@@ -1228,13 +1288,23 @@
           : null;
 
     if (!GUI || typeof GUI.mount !== 'function') {
-      setRuntimeStatus('gui', selectedSources.gui, resolveAssetUrl(selectedSources.gui, LOCAL_GUI_BOOTSTRAP, CDN_GUI_BOOTSTRAP), 'off');
+      setRuntimeStatus(
+        'gui',
+        loadedRuntimeAssets.gui ? loadedRuntimeAssets.gui.source : selectedSources.gui,
+        loadedRuntimeAssets.gui ? loadedRuntimeAssets.gui.url : resolveAssetUrl(selectedSources.gui, LOCAL_GUI_BOOTSTRAP, CDN_GUI_BOOTSTRAP),
+        'off'
+      );
       rootEl.innerHTML =
         '<div style="font-family:ui-sans-serif,system-ui;padding:24px">window.GUI.mount is missing.</div>';
       return;
     }
     if (!Me) {
-      setRuntimeStatus('me', selectedSources.me, resolveAssetUrl(selectedSources.me, LOCAL_ME_UMD, CDN_ME_UMD), 'off');
+      setRuntimeStatus(
+        'me',
+        loadedRuntimeAssets.me ? loadedRuntimeAssets.me.source : selectedSources.me,
+        loadedRuntimeAssets.me ? loadedRuntimeAssets.me.url : resolveAssetUrl(selectedSources.me, LOCAL_ME_UMD, CDN_ME_UMD),
+        'off'
+      );
       rootEl.innerHTML =
         '<div style="font-family:ui-sans-serif,system-ui;padding:24px">window.Me is missing.</div>';
       return;
@@ -1250,7 +1320,12 @@
       return;
     }
     if (typeof Cleaker !== 'function') {
-      setRuntimeStatus('cleaker', selectedSources.cleaker, resolveAssetUrl(selectedSources.cleaker, LOCAL_CLEAKER_UMD, CDN_CLEAKER_UMD), 'off');
+      setRuntimeStatus(
+        'cleaker',
+        loadedRuntimeAssets.cleaker ? loadedRuntimeAssets.cleaker.source : selectedSources.cleaker,
+        loadedRuntimeAssets.cleaker ? loadedRuntimeAssets.cleaker.url : resolveAssetUrl(selectedSources.cleaker, LOCAL_CLEAKER_UMD, CDN_CLEAKER_UMD),
+        'off'
+      );
       rootEl.innerHTML =
         '<div style="font-family:ui-sans-serif,system-ui;padding:24px">window.Cleaker.default is missing.</div>';
       return;
@@ -1279,7 +1354,7 @@
       CleakerModule?.VERSION ||
       CleakerModule?.__version ||
       CleakerModule?.__VERSION__ ||
-      CLEAKER_LOCAL_VERSION;
+      CLEAKER_CDN_VERSION;
     const DOM_MODULE = window.DOM || window.dom;
     const DOM_VERSION =
       DOM_MODULE?.version ||
@@ -1287,22 +1362,36 @@
       DOM_MODULE?.__version ||
       DOM_MODULE?.__VERSION__ ||
       THIS_DOM_CDN_VERSION;
-    setRuntimeStatus('gui', selectedSources.gui, resolveAssetUrl(selectedSources.gui, LOCAL_GUI_BOOTSTRAP, CDN_GUI_BOOTSTRAP), 'on', GUI_VERSION);
-    setRuntimeStatus('cleaker', selectedSources.cleaker, resolveAssetUrl(selectedSources.cleaker, LOCAL_CLEAKER_UMD, CDN_CLEAKER_UMD), 'on', CLEAKER_VERSION);
-    setRuntimeStatus('me', selectedSources.me, resolveAssetUrl(selectedSources.me, LOCAL_ME_UMD, CDN_ME_UMD), 'on', ME_VERSION);
-    setRuntimeStatus('dom', selectedSources.dom, resolveAssetUrl(selectedSources.dom, LOCAL_DOM_UMD, CDN_DOM_UMD), DOM_MODULE ? 'on' : 'off', DOM_VERSION);
+    setRuntimeStatus(
+      'gui',
+      loadedRuntimeAssets.gui ? loadedRuntimeAssets.gui.source : selectedSources.gui,
+      loadedRuntimeAssets.gui ? loadedRuntimeAssets.gui.url : resolveAssetUrl(selectedSources.gui, LOCAL_GUI_BOOTSTRAP, CDN_GUI_BOOTSTRAP),
+      'on',
+      GUI_VERSION
+    );
+    setRuntimeStatus(
+      'cleaker',
+      loadedRuntimeAssets.cleaker ? loadedRuntimeAssets.cleaker.source : selectedSources.cleaker,
+      loadedRuntimeAssets.cleaker ? loadedRuntimeAssets.cleaker.url : resolveAssetUrl(selectedSources.cleaker, LOCAL_CLEAKER_UMD, CDN_CLEAKER_UMD),
+      'on',
+      CLEAKER_VERSION
+    );
+    setRuntimeStatus(
+      'me',
+      loadedRuntimeAssets.me ? loadedRuntimeAssets.me.source : selectedSources.me,
+      loadedRuntimeAssets.me ? loadedRuntimeAssets.me.url : resolveAssetUrl(selectedSources.me, LOCAL_ME_UMD, CDN_ME_UMD),
+      'on',
+      ME_VERSION
+    );
+    setRuntimeStatus(
+      'dom',
+      loadedRuntimeAssets.dom ? loadedRuntimeAssets.dom.source : selectedSources.dom,
+      loadedRuntimeAssets.dom ? loadedRuntimeAssets.dom.url : resolveAssetUrl(selectedSources.dom, LOCAL_DOM_UMD, CDN_DOM_UMD),
+      DOM_MODULE ? 'on' : 'off',
+      DOM_VERSION
+    );
     function getInitialCleakerBootstrapOrigins() {
-      if (IS_FILE_ORIGIN) return [DAEMON_ORIGIN];
-      const activeContext = getActiveContext();
-      const seen = new Set();
-      const result = [];
-      [activeContext.origin, getContextByKey('cleaker').origin].forEach(function (origin) {
-        const normalized = String(origin || '').replace(/\/+$/, '');
-        if (!normalized || seen.has(normalized)) return;
-        seen.add(normalized);
-        result.push(normalized);
-      });
-      return result;
+      return getBootstrapOriginsForContext(getActiveContext());
     }
     const me = new Me();
     const triadSecret = readSavedTriadSecret();
@@ -1416,9 +1505,10 @@
       let domFn = resolveDomFunction();
       if (typeof domFn === 'function') return domFn;
       const source = selectedSources && selectedSources.dom ? selectedSources.dom : defaultSource;
-      const domUrl = resolveAssetUrl(source, LOCAL_DOM_UMD, CDN_DOM_UMD);
+      const domUrl = loadedRuntimeAssets.dom ? loadedRuntimeAssets.dom.url : resolveAssetUrl(source, LOCAL_DOM_UMD, CDN_DOM_UMD);
       try {
-        await loadRuntimeScriptWithFallback(source, LOCAL_DOM_UMD, CDN_DOM_UMD);
+        const domAsset = await loadRuntimeScriptWithFallback(source, LOCAL_DOM_UMD, CDN_DOM_UMD);
+        loadedRuntimeAssets.dom = domAsset || loadedRuntimeAssets.dom;
       } catch (error) {
         const msg = error && error.message ? error.message : String(error);
         setRuntimeStatus('dom', source, domUrl, 'off');
@@ -1436,7 +1526,13 @@
         mod?.__version ||
         mod?.__VERSION__ ||
         THIS_DOM_CDN_VERSION;
-      setRuntimeStatus('dom', source, domUrl, 'on', version);
+      setRuntimeStatus(
+        'dom',
+        loadedRuntimeAssets.dom ? loadedRuntimeAssets.dom.source : source,
+        loadedRuntimeAssets.dom ? loadedRuntimeAssets.dom.url : domUrl,
+        'on',
+        version
+      );
       return domFn;
     }
 
@@ -2871,8 +2967,7 @@
           'aria-label': 'DOM',
           className: 'gui-leftbar-logo',
         },
-        createDomIcon({ size: 55, title: 'DOM' }),
-        window.React.createElement('span', { className: 'gui-leftbar-logo-label' }, 'DOM')
+        createDomIcon({ size: 55, title: 'DOM' })
       );
     }
 
