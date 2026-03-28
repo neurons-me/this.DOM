@@ -53,6 +53,99 @@
     justify-content: flex-start;
   }
 
+  .gui-leftbar-cleaker-qr {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 72px;
+    justify-content: center;
+    padding: 6px 10px;
+    box-sizing: border-box;
+    color: inherit;
+    overflow: hidden;
+    text-decoration: none;
+    cursor: pointer;
+    transition: opacity 160ms ease;
+  }
+
+  .gui-leftbar-cleaker-qr:hover {
+    opacity: 0.92;
+  }
+
+  .gui-leftbar-cleaker-qr-canvas {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+    min-width: 0;
+  }
+
+  .gui-leftbar-cleaker-qr [data-gui-component="Cleaker"] {
+    width: auto !important;
+    display: flex !important;
+    justify-content: center;
+  }
+
+  .gui-leftbar-cleaker-qr [data-gui-component="Cleaker.Card"] {
+    width: auto !important;
+    max-width: none !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .gui-leftbar-cleaker-qr [data-gui-component="Cleaker.Header"] {
+    gap: 0 !important;
+    margin-bottom: 0 !important;
+    justify-content: center !important;
+  }
+
+  .gui-leftbar-cleaker-qr [data-gui-component="Cleaker.IdentityShell"],
+  .gui-leftbar-cleaker-qr [data-gui-component="Cleaker.ClaimState"],
+  .gui-leftbar-cleaker-qr [data-gui-component="Cleaker.Controls"] {
+    display: none !important;
+  }
+
+  .gui-leftbar-cleaker-qr [data-gui-component="Cleaker.AvatarQR"] {
+    width: 58px !important;
+    height: 58px !important;
+    min-width: 58px !important;
+    min-height: 58px !important;
+    cursor: default !important;
+    pointer-events: none;
+    transition: none !important;
+  }
+
+  .gui-leftbar-cleaker-qr [data-gui-component="Cleaker.AvatarQR"] svg {
+    width: 58px !important;
+    height: 58px !important;
+  }
+
+  .gui-leftbar-cleaker-qr-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    opacity: 0.88;
+  }
+
+  .gui-leftbar-rail .gui-leftbar-cleaker-qr {
+    justify-content: center;
+    padding: 6px 4px;
+  }
+
+  .gui-leftbar-rail .gui-leftbar-cleaker-qr-label {
+    display: none;
+  }
+
+  .gui-leftbar-expanded .gui-leftbar-cleaker-qr {
+    justify-content: flex-start;
+  }
+
   .gui-leftbar-footer-logo {
     display: flex;
     align-items: center;
@@ -399,6 +492,14 @@
     const GUI_LATEST_META_URL = 'https://registry.npmjs.org/this.gui/latest';
     const REMOTE_ASSET_TIMEOUT_MS = 8000;
     const DAEMON_ORIGIN = 'http://localhost:8161';
+    const DOM_FETCH_TIMEOUT_MS = 12000;
+    const HOSTED_FETCH_PROXY_ORIGIN = String(
+      window.DOMHostedFetchOrigin ||
+      window.DOM_HOSTED_FETCH_ORIGIN ||
+      'https://monadlisa.ai'
+    ).replace(/\/+$/, '');
+    const LOCAL_MONAD_FETCH_ENDPOINT = String(DAEMON_ORIGIN).replace(/\/+$/, '') + '/__fetch';
+    const HOSTED_FETCH_PROXY_ENDPOINT = HOSTED_FETCH_PROXY_ORIGIN + '/__fetch';
     const TRIAD_SECRET_STORAGE_KEY = 'cleaker.triad.secret.v1';
     const TRIAD_USERNAME_STORAGE_KEY = 'cleaker.triad.username.v1';
     const TRIAD_CREDENTIALS_EVENT = 'cleaker:triad:credentials-changed';
@@ -1633,6 +1734,162 @@
       return JSON.stringify({ status: domStatus.message }, null, 2);
     }
 
+    function normalizeDomFetchUrl(raw) {
+      const value = String(raw || '').trim();
+      if (!value) return null;
+      try {
+        const parsed = new URL(value);
+        if (!/^https?:$/i.test(parsed.protocol)) return null;
+        return parsed.toString();
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function buildDomFetchErrorMessage(error, fallback) {
+      if (error && typeof error === 'object' && error.name === 'AbortError') {
+        return fallback || 'Request timed out.';
+      }
+      return error && error.message ? error.message : String(error || fallback || 'Request failed.');
+    }
+
+    async function fetchWithTimeout(url, options, timeoutMs) {
+      const controller = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = controller
+        ? window.setTimeout(function () {
+            controller.abort();
+          }, timeoutMs)
+        : null;
+      try {
+        const requestOptions = controller ? { ...options, signal: controller.signal } : options;
+        return await fetch(url, requestOptions);
+      } finally {
+        if (timer != null) {
+          window.clearTimeout(timer);
+        }
+      }
+    }
+
+    function extractHtmlFromFetchResult(result) {
+      if (typeof result === 'string') return result;
+      if (result && typeof result.html === 'string') return result.html;
+      if (result && typeof result.body === 'string') return result.body;
+      if (result && result.value && typeof result.value.body === 'string') return result.value.body;
+      return '';
+    }
+
+    async function fetchHtmlViaProxy(url, endpoint, label) {
+      domStatus = { state: 'loading', message: 'Fetching via ' + label + '...' };
+      rerender();
+      const requestUrl = endpoint + '?url=' + encodeURIComponent(url);
+      const response = await fetchWithTimeout(requestUrl, {
+        headers: {
+          accept: 'application/json'
+        }
+      }, DOM_FETCH_TIMEOUT_MS);
+      const text = await response.text();
+      let payload = null;
+      try {
+        payload = text ? JSON.parse(text) : null;
+      } catch (_) {}
+      if (!response.ok || (payload && payload.ok === false)) {
+        const detail =
+          payload && (payload.detail || payload.error)
+            ? String(payload.detail || payload.error)
+            : text || ('HTTP ' + response.status);
+        throw new Error(label + ' failed. ' + detail);
+      }
+      const html = extractHtmlFromFetchResult(payload);
+      if (!html) {
+        throw new Error(label + ' returned no HTML.');
+      }
+      return {
+        html: html,
+        via: label,
+        finalUrl:
+          payload && payload.value && (payload.value.finalUrl || payload.value.url)
+            ? String(payload.value.finalUrl || payload.value.url)
+            : url,
+      };
+    }
+
+    async function fetchHtmlDirect(url) {
+      domStatus = { state: 'loading', message: 'Fetching directly from URL...' };
+      rerender();
+      const response = await fetchWithTimeout(url, {
+        method: 'GET',
+        redirect: 'follow',
+        headers: {
+          accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+        }
+      }, DOM_FETCH_TIMEOUT_MS);
+      const html = await response.text();
+      if (!html) {
+        throw new Error('Direct fetch returned no HTML.');
+      }
+      return {
+        html: html,
+        via: 'direct fetch',
+        finalUrl: response.url || url,
+      };
+    }
+
+    async function fetchDomHtml(url) {
+      const customFetcher =
+        window.DOMFetcher ||
+        window.domFetcher ||
+        (window.DOM && window.DOM.fetcher) ||
+        null;
+
+      if (typeof customFetcher === 'function') {
+        domStatus = { state: 'loading', message: 'Fetching via custom fetcher...' };
+        rerender();
+        const result = await customFetcher(url);
+        const html = extractHtmlFromFetchResult(result);
+        if (!html) {
+          throw new Error('Custom fetcher returned no HTML.');
+        }
+        return {
+          html: html,
+          via: 'custom fetcher',
+          finalUrl: url,
+        };
+      }
+
+      const attempts = [
+        {
+          label: 'local monad.ai',
+          run: function () {
+            return fetchHtmlViaProxy(url, LOCAL_MONAD_FETCH_ENDPOINT, 'local monad.ai');
+          }
+        },
+        {
+          label: 'direct fetch',
+          run: function () {
+            return fetchHtmlDirect(url);
+          }
+        },
+        {
+          label: 'monadlisa.ai',
+          run: function () {
+            return fetchHtmlViaProxy(url, HOSTED_FETCH_PROXY_ENDPOINT, 'monadlisa.ai');
+          }
+        }
+      ];
+
+      const failures = [];
+      for (let i = 0; i < attempts.length; i += 1) {
+        const attempt = attempts[i];
+        try {
+          return await attempt.run();
+        } catch (error) {
+          failures.push(attempt.label + ': ' + buildDomFetchErrorMessage(error));
+        }
+      }
+
+      throw new Error('All fetch strategies failed. ' + failures.join(' | '));
+    }
+
     function resolveDomFunction() {
       const mod = window.DOM || window.dom;
       if (typeof mod === 'function') return mod;
@@ -1719,42 +1976,28 @@
     }
 
     async function runDomParseFromUrl() {
-      const url = String(domUrlInput || '').trim();
-      if (!url) {
+      const rawUrl = String(domUrlInput || '').trim();
+      if (!rawUrl) {
         domStatus = { state: 'error', message: 'URL is empty.' };
         domJsonOutput = JSON.stringify({ error: domStatus.message }, null, 2);
         rerender();
         return;
       }
-      const fetcher =
-        window.DOMFetcher ||
-        window.domFetcher ||
-        (window.DOM && window.DOM.fetcher) ||
-        null;
-      if (typeof fetcher !== 'function') {
+      const url = normalizeDomFetchUrl(rawUrl);
+      if (!url) {
         domStatus = {
           state: 'error',
-          message: 'No fetcher installed. Paste HTML or provide window.DOMFetcher(url).'
+          message: 'Only absolute http(s) URLs are supported right now.'
         };
         domJsonOutput = JSON.stringify({ error: domStatus.message }, null, 2);
         rerender();
         return;
       }
-      domStatus = { state: 'loading', message: 'Fetching via external fetcher...' };
-      rerender();
       try {
-        const result = await fetcher(url);
-        const html =
-          typeof result === 'string'
-            ? result
-            : result && typeof result.html === 'string'
-              ? result.html
-              : '';
-        if (!html) {
-          throw new Error('Fetcher returned no HTML.');
-        }
-        domHtmlInput = html;
-        domPreviewHtml = buildPreviewHtml(html);
+        const result = await fetchDomHtml(url);
+        domHtmlInput = result.html;
+        domUrlInput = result.finalUrl || url;
+        domPreviewHtml = buildPreviewHtml(result.html);
         await runDomParse(domPreviewHtml, 'URL');
       } catch (err) {
         const message = err && err.message ? err.message : String(err);
@@ -3191,6 +3434,79 @@
       );
     }
 
+    function createLeftBarCleakerQR() {
+      if (!window.React || !window.GUI || !window.GUI.CleakerQR || typeof window.React.createElement !== 'function') {
+        return null;
+      }
+
+      const React = window.React;
+      const CleakerQR = window.GUI.CleakerQR;
+      const SESSION_CREDENTIALS_EVENT = 'cleaker:session:credentials-changed';
+      const SESSION_USERNAME_STORAGE_KEY = 'cleaker.session.username.v1';
+      const SESSION_SECRET_STORAGE_KEY = 'cleaker.session.secret.v1';
+
+      function LeftBarCleakerQR() {
+        const [version, setVersion] = React.useState(0);
+
+        React.useEffect(function () {
+          function rerender() {
+            setVersion(function (value) {
+              return value + 1;
+            });
+          }
+
+          function handleStorage(event) {
+            if (!event || !event.key) {
+              rerender();
+              return;
+            }
+
+            if (
+              event.key === SESSION_USERNAME_STORAGE_KEY ||
+              event.key === SESSION_SECRET_STORAGE_KEY
+            ) {
+              rerender();
+            }
+          }
+
+          window.addEventListener(SESSION_CREDENTIALS_EVENT, rerender);
+          window.addEventListener('storage', handleStorage);
+
+          return function () {
+            window.removeEventListener(SESSION_CREDENTIALS_EVENT, rerender);
+            window.removeEventListener('storage', handleStorage);
+          };
+        }, []);
+
+        return React.createElement(
+          'a',
+          {
+            className: 'gui-leftbar-cleaker-qr',
+            href: 'https://neurons-me.github.io/Cleaker',
+            title: 'Cleaker',
+            'aria-label': 'Cleaker'
+          },
+          React.createElement(
+            'div',
+            { className: 'gui-leftbar-cleaker-qr-canvas' },
+            React.createElement(CleakerQR, {
+              key: 'leftbar-cleaker-qr-' + version,
+              variant: 'icon',
+              'data-gui-node-id': 'LeftBarCleakerQR',
+              'data-gui-component': 'Cleaker.QR.Icon'
+            })
+          ),
+          React.createElement(
+            'span',
+            { className: 'gui-leftbar-cleaker-qr-label' },
+            'ME'
+          )
+        );
+      }
+
+      return React.createElement(LeftBarCleakerQR);
+    }
+
     let leftbarResizeObserver = null;
     let leftbarObserverTarget = null;
 
@@ -3454,12 +3770,14 @@
             })
           : null;
       const guiLogo = createGuiLeftBarLogo();
+      const cleakerQR = createLeftBarCleakerQR();
       const domLogo = createDomLeftBarLogo();
       const footerLogo = createLeftBarFooterLogo();
       return {
         initialView: 'rail',
         elements: [
           guiLogo ? { type: 'action', props: { element: guiLogo } } : null,
+          cleakerQR ? { type: 'action', props: { element: cleakerQR } } : null,
           domLogo ? { type: 'action', props: { element: domLogo } } : null
         ].filter(Boolean),
         footerElements: [
@@ -3578,7 +3896,7 @@
                       {
                         type: 'TextField',
                         props: {
-                          label: 'URL (external fetcher)',
+                          label: 'URL (local monad -> direct -> monadlisa.ai)',
                           value: domUrlInput,
                           size: 'small',
                           fullWidth: true,
