@@ -1,6 +1,6 @@
 {
   "name": "this.dom",
-  "version": "1.0.98",
+  "version": "1.0.99",
   "description": "A structured data formatter for the DOM.",
   "main": "./dist/dom.cjs",
   "module": "./dist/dom.es.js",
